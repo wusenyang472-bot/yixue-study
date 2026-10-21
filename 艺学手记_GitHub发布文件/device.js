@@ -1,0 +1,21 @@
+'use strict';
+const oldRender=render,oldQuestion=renderQuestion,oldGo=go,oldClose=closeReader;
+let deferredInstall=null;
+function deviceName(){return innerWidth<700?'phone':'tablet';}
+function splitReader(){return innerWidth>=1100&&activeQuestion&&['bank','review'].includes(view);}
+function setDevice(){document.body.dataset.device=deviceName();document.body.dataset.view=view;$('#device-label').textContent=deviceName()==='phone'?'手机学习':'平板／桌面学习';}
+showReader=function(){const d=$('#reader'),split=splitReader(),wasModal=d.matches(':modal');document.body.dataset.reader=split?'split':'modal';if(d.open&&wasModal===!!split)d.close();if(!d.open){if(split)d.show();else d.showModal();}d.scrollTop=0;document.querySelectorAll('[data-q]').forEach(b=>b.classList.toggle('is-current',b.dataset.q===activeQuestion?.id));};
+closeReader=function(){document.body.dataset.reader='';oldClose();};
+go=function(v,c){if($('#reader').open){$('#reader').close();activeQuestion=null;}document.body.dataset.reader='';$('#more-menu').open=false;oldGo(v,c);};
+render=function(){oldRender();setDevice();decorateDevice();};
+renderQuestion=function(){oldQuestion();const q=activeQuestion;if(!q)return;const pool=filtered().filter(x=>x.course===q.course),idx=pool.findIndex(x=>x.id===q.id),navigation=document.createElement('div');navigation.className='q-pagination';navigation.innerHTML=`<button id="read-prev" ${idx<=0?'disabled':''}>← 上一题</button><small>${idx>=0?idx+1:1} / ${pool.length||1}</small><button id="read-next" ${idx<0||idx>=pool.length-1?'disabled':''}>下一题 →</button>`;$('#reader-content').append(navigation);$('#read-prev').onclick=()=>openQuestion(pool[idx-1].id);$('#read-next').onclick=()=>openQuestion(pool[idx+1].id);for(const el of document.querySelectorAll('#scratch,#q-note'))el.addEventListener('input',()=>{state.notes[q.id]=el.value;save();});setDevice();};
+function offlineInfo(){return `<section class="device-help"><h2>手机与平板使用</h2><p>当前采用${deviceName()==='phone'?'手机布局：底部导航、单列课程、整屏读题':'平板布局：侧栏导航、课程网格；宽屏题库支持左题目右答案'}。转动设备或调整窗口后会自动切换。</p><p>iPhone／iPad：用 Safari 打开，点分享按钮，再选“添加到主屏幕”。安卓：在浏览器菜单中选择“安装应用”或“添加到主屏幕”。</p><p id="cache-status">${navigator.onLine?'首次完整加载后会尝试保存离线资料。':'当前离线：正在使用已缓存的学习资料。'} 学习进度仍存于当前浏览器；定期导出备份。</p></section>`;}
+function decorateDevice(){if(view==='home'){const strip=document.createElement('div');strip.id='install-strip';strip.innerHTML=`<div><strong>${deviceName()==='phone'?'手机学习版':'平板学习版'}</strong><small>免注册使用 · 记录存于本机 · 支持离线资料缓存</small></div><button id="install-help" class="secondary">${deferredInstall?'安装到主屏幕':'使用提示'}</button>`;$('#main').insertBefore(strip,$('#main').firstChild);$('#install-help').onclick=async()=>{if(deferredInstall){await deferredInstall.prompt();deferredInstall=null;}else go('settings');};}if(view==='settings')$('#main').insertAdjacentHTML('beforeend',offlineInfo());}
+addEventListener('resize',()=>{setDevice();if($('#reader').open)showReader();});
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;if(view==='home'&&$('#install-help'))$('#install-help').textContent='安装到主屏幕';});
+addEventListener('offline',()=>toast('已离线，缓存完成后仍可学习'));addEventListener('online',()=>toast('网络已连接'));
+$('#reader').addEventListener('close',()=>{if(!$('#reader').open)document.body.dataset.reader='';});
+document.addEventListener('click',e=>{if(!e.target.closest('#more-menu'))$('#more-menu').open=false;});
+document.addEventListener('keydown',e=>{if(['INPUT','TEXTAREA','SELECT','BUTTON','SUMMARY'].includes(document.activeElement?.tagName))return;if(view==='cards'&&cardSession&&e.code==='Space'){e.preventDefault();$('#card-flip')?.click();}if(activeQuestion&&$('#reader').open){if(e.key==='ArrowRight')$('#read-next')?.click();if(e.key==='ArrowLeft')$('#read-prev')?.click();}});
+if('serviceWorker'in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('./sw.js').then(async reg=>{await navigator.serviceWorker.ready;const installed=reg.active||reg.installing||reg.waiting;if(installed?.state==='activated'&&$('#cache-status'))$('#cache-status').textContent='离线资料缓存已就绪；断网后仍可学习。学习记录在本机，建议定期备份。';}).catch(()=>{if($('#cache-status'))$('#cache-status').textContent='当前浏览器未启用离线缓存；联网学习仍可正常使用。';});
+render();
